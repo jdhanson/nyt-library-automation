@@ -24,6 +24,8 @@ from config import (
     LIBRARY_URL,
     LIBRARY_CARD_BARCODE,
     NYT_REDEEM_BASE_URL,
+    NYT_USERNAME,
+    NYT_PASSWORD,
     HEADLESS,
     LOG_DIR,
     LOG_FILE
@@ -155,6 +157,153 @@ def get_library_code(driver, logger):
         raise
 
 
+def login_nyt(driver, logger):
+    """Log in to NY Times website (handles two-step login process)"""
+    if not NYT_USERNAME or not NYT_PASSWORD:
+        logger.warning("NY Times credentials not provided - skipping login")
+        return False
+    
+    try:
+        logger.info("Looking for login form...")
+        
+        # Wait a moment for page to fully load
+        time.sleep(2)
+        
+        # STEP 1: Enter email and click Continue
+        try:
+            # Look for email field (NY Times uses "Email address" label)
+            email_field = WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((
+                    By.XPATH,
+                    "//input[@type='email'] | "
+                    "//input[contains(@placeholder, 'Email') or contains(@placeholder, 'email')] | "
+                    "//input[@name='email' or @id='email' or @name='username'] | "
+                    "//label[contains(text(), 'Email')]/following-sibling::input | "
+                    "//label[contains(text(), 'Email')]/../input"
+                ))
+            )
+            logger.info("Found email field - entering email address")
+            # Scroll into view
+            driver.execute_script("arguments[0].scrollIntoView(true);", email_field)
+            time.sleep(0.5)
+            # Click the field first to focus it
+            email_field.click()
+            time.sleep(0.3)
+            # Clear any existing value
+            email_field.clear()
+            time.sleep(0.2)
+            # Use send_keys to properly trigger form validation
+            email_field.send_keys(NYT_USERNAME)
+            time.sleep(1)
+            # Verify the email was entered
+            entered_value = email_field.get_attribute('value')
+            if entered_value != NYT_USERNAME:
+                logger.warning(f"Email value mismatch. Expected: {NYT_USERNAME}, Got: {entered_value}")
+                # Try setting it again
+                email_field.clear()
+                time.sleep(0.3)
+                email_field.send_keys(NYT_USERNAME)
+                time.sleep(0.5)
+            else:
+                logger.info(f"Email entered successfully: {entered_value}")
+            # Also trigger input event to ensure validation
+            driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", email_field)
+            driver.execute_script("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", email_field)
+            # Click outside to trigger blur validation
+            driver.execute_script("arguments[0].blur();", email_field)
+            time.sleep(1.5)  # Wait for form validation to complete
+        except (TimeoutException, Exception) as e:
+            logger.warning(f"Email field not found: {e}")
+            return False
+        
+        # Click Continue button - wait for it to be enabled
+        try:
+            # Wait for Continue button to be clickable and enabled
+            continue_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((
+                    By.XPATH,
+                    "//button[contains(text(), 'Continue') and not(@disabled)] | "
+                    "//button[@type='submit' and not(@disabled)] | "
+                    "//input[@type='submit' and contains(@value, 'Continue') and not(@disabled)]"
+                ))
+            )
+            logger.info("Continue button is enabled - clicking...")
+            # Double-check the button is not disabled
+            if continue_button.get_attribute("disabled") is None:
+                continue_button.click()
+                time.sleep(3)  # Wait for password page to load
+            else:
+                logger.warning("Continue button is disabled - waiting a bit more...")
+                time.sleep(2)
+                continue_button.click()
+                time.sleep(3)
+        except TimeoutException:
+            logger.error("Continue button not found")
+            return False
+        
+        # STEP 2: Enter password and submit
+        try:
+            password_field = WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((
+                    By.XPATH,
+                    "//input[@type='password']"
+                ))
+            )
+            logger.info("Found password field - entering password")
+            # Scroll into view
+            driver.execute_script("arguments[0].scrollIntoView(true);", password_field)
+            time.sleep(0.5)
+            # Click the field first to focus it
+            password_field.click()
+            time.sleep(0.3)
+            # Clear any existing value
+            password_field.clear()
+            time.sleep(0.2)
+            # Use send_keys to properly enter password
+            password_field.send_keys(NYT_PASSWORD)
+            time.sleep(0.5)
+            # Trigger input event to ensure validation
+            driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", password_field)
+            driver.execute_script("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", password_field)
+            time.sleep(0.5)
+        except (TimeoutException, Exception) as e:
+            logger.error(f"Password field not found: {e}")
+            return False
+        
+        # Click final login/submit button
+        try:
+            login_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((
+                    By.XPATH,
+                    "//button[contains(text(), 'Log in') or contains(text(), 'Sign in') or contains(text(), 'Login')] | "
+                    "//button[@type='submit'] | "
+                    "//input[@type='submit']"
+                ))
+            )
+            logger.info("Clicking login/submit button...")
+            login_button.click()
+            
+            # Wait for login to complete
+            time.sleep(3)
+            
+            # Check if login was successful
+            current_url = driver.current_url
+            if "account" in current_url or "welcome" in current_url or "login" not in current_url.lower() or "activate" in current_url:
+                logger.info("Login appears successful")
+                return True
+            else:
+                logger.warning("Login may have failed - still on login page")
+                return False
+                
+        except TimeoutException:
+            logger.error("Login button not found")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error during login: {e}")
+        return False
+
+
 def redeem_nyt_code(driver, gift_code, redirect_url, logger):
     """Redeem the code on NY Times website"""
     try:
@@ -187,6 +336,17 @@ def redeem_nyt_code(driver, gift_code, redirect_url, logger):
             
             # Wait a moment for the page to process
             time.sleep(3)
+            
+            # Check if login is required
+            current_url = driver.current_url
+            logger.info(f"Current URL after redemption: {current_url}")
+            
+            # If we're redirected to a login page, handle login
+            if "login" in current_url.lower() or "signin" in current_url.lower() or NYT_USERNAME:
+                logger.info("Login page detected or credentials provided - attempting to log in...")
+                login_success = login_nyt(driver, logger)
+                if not login_success:
+                    logger.warning("Login failed or not required - redemption may have succeeded without login")
             
             logger.info("Code redemption initiated successfully")
             return True

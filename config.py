@@ -14,6 +14,8 @@ LIBRARY_CARD_BARCODE = os.getenv("LIBRARY_CARD_BARCODE", "")
 
 # NY Times configuration
 NYT_REDEEM_BASE_URL = "https://www.nytimes.com/subscription/redeem"
+NYT_USERNAME = os.getenv("NYT_USERNAME", "")
+NYT_PASSWORD = os.getenv("NYT_PASSWORD", "")
 
 # Browser configuration
 HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
