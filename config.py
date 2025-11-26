@@ -10,7 +10,7 @@ load_dotenv()
 
 # Library configuration
 LIBRARY_URL = "https://pr.indypl.org/nyt/nytTokenSignIn.php?section=digital"
-LIBRARY_CARD_BARCODE = os.getenv("LIBRARY_CARD_BARCODE", "21978067510935")
+LIBRARY_CARD_BARCODE = os.getenv("LIBRARY_CARD_BARCODE", "")
 
 # NY Times configuration
 NYT_REDEEM_BASE_URL = "https://www.nytimes.com/subscription/redeem"
