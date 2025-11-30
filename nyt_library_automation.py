@@ -283,11 +283,25 @@ def login_nyt(driver, logger):
             logger.info("Clicking login/submit button...")
             login_button.click()
             
-            # Wait for login to complete
-            time.sleep(3)
+            # Wait for login to complete and redirect
+            time.sleep(5)
+            
+            # Wait for redirect to activation/confirmation page
+            try:
+                WebDriverWait(driver, 15).until(
+                    lambda d: "activate" in d.current_url.lower() or 
+                             "account" in d.current_url.lower() or 
+                             "welcome" in d.current_url.lower() or
+                             "login" not in d.current_url.lower()
+                )
+                logger.info("Redirected after login - waiting for activation to complete...")
+                time.sleep(5)  # Give time for activation to process
+            except TimeoutException:
+                logger.warning("No redirect detected after login")
             
             # Check if login was successful
             current_url = driver.current_url
+            logger.info(f"Final URL after login: {current_url}")
             if "account" in current_url or "welcome" in current_url or "login" not in current_url.lower() or "activate" in current_url:
                 logger.info("Login appears successful")
                 return True
@@ -347,6 +361,40 @@ def redeem_nyt_code(driver, gift_code, redirect_url, logger):
                 login_success = login_nyt(driver, logger)
                 if not login_success:
                     logger.warning("Login failed or not required - redemption may have succeeded without login")
+                else:
+                    # After successful login, wait for redirect to activation page
+                    logger.info("Waiting for redirect to activation page after login...")
+                    try:
+                        # Wait for redirect to activation page (the redirect_uri from login contains access_code)
+                        WebDriverWait(driver, 30).until(
+                            lambda d: "activate" in d.current_url.lower() or 
+                                     "activate-access" in d.current_url.lower()
+                        )
+                        logger.info("Reached activation page - waiting for activation to process...")
+                        time.sleep(5)  # Give time for activation to process
+                        
+                        # Check for success indicators
+                        page_source = driver.page_source.lower()
+                        current_url = driver.current_url
+                        logger.info(f"Activation page URL: {current_url}")
+                        
+                        # Look for success messages or check if we're redirected to account/home
+                        if "code already redeemed" in page_source:
+                            logger.warning("Code was already redeemed")
+                        elif "success" in page_source or "activated" in page_source or "welcome" in page_source:
+                            logger.info("Activation appears successful based on page content")
+                        elif "account" in current_url or "home" in current_url:
+                            logger.info("Redirected to account/home page - activation likely successful")
+                        else:
+                            logger.info("Waiting additional time for activation to complete...")
+                            time.sleep(5)  # Extra wait for activation
+                            
+                    except TimeoutException:
+                        logger.warning("Timeout waiting for activation page - checking current state...")
+                        final_url = driver.current_url
+                        logger.info(f"Final URL: {final_url}")
+                        # Even if timeout, wait a bit more in case activation is still processing
+                        time.sleep(5)
             
             logger.info("Code redemption initiated successfully")
             return True
@@ -404,9 +452,13 @@ def main():
         else:
             logger.warning("Automation completed with warnings - please check manually")
         
-        # Keep browser open briefly to see results (if not headless)
+        # Keep browser open longer to ensure activation completes (if not headless)
         if not HEADLESS:
-            logger.info("Keeping browser open for 10 seconds for manual verification...")
+            logger.info("Keeping browser open for 30 seconds to ensure activation completes...")
+            time.sleep(30)
+        else:
+            # Even in headless mode, wait a bit to ensure activation completes
+            logger.info("Waiting additional 10 seconds to ensure activation completes...")
             time.sleep(10)
         
     except Exception as e:
