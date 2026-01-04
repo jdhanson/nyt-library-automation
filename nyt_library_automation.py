@@ -381,6 +381,24 @@ def redeem_nyt_code(driver, gift_code, redirect_url, logger):
                         # Look for success messages or check if we're redirected to account/home
                         if "code already redeemed" in page_source:
                             logger.warning("Code was already redeemed")
+                        elif "your access code is valid" in page_source or "access code is valid" in page_source:
+                            logger.info("Access code validated - looking for Continue button to complete setup...")
+                            try:
+                                # Look for Continue button on the activation confirmation page
+                                continue_button = WebDriverWait(driver, 10).until(
+                                    EC.element_to_be_clickable((
+                                        By.XPATH,
+                                        "//button[contains(text(), 'Continue')] | "
+                                        "//button[@type='submit' and contains(text(), 'Continue')] | "
+                                        "//a[contains(text(), 'Continue')]"
+                                    ))
+                                )
+                                logger.info("Found Continue button - clicking to complete activation...")
+                                continue_button.click()
+                                time.sleep(3)  # Wait for redirect after clicking Continue
+                                logger.info("Continue button clicked - activation should be complete")
+                            except TimeoutException:
+                                logger.warning("Continue button not found - activation may already be complete")
                         elif "success" in page_source or "activated" in page_source or "welcome" in page_source:
                             logger.info("Activation appears successful based on page content")
                         elif "account" in current_url or "home" in current_url:
