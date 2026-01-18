@@ -75,12 +75,20 @@ def create_driver():
         chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
-    service = Service(ChromeDriverManager().install())
+    # Try to use system ChromeDriver first (for Docker), fallback to webdriver-manager
+    import shutil
+    system_chromedriver = shutil.which("chromedriver")
+    if system_chromedriver:
+        service = Service(system_chromedriver)
+    else:
+        service = Service(ChromeDriverManager().install())
+    
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 

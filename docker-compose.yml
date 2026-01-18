@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  nyt-automation:
+    # Option 1: Build from Dockerfile (uncomment to build locally)
+    # build: .
+    
+    # Option 2: Use pre-built image (for Synology NAS)
+    image: nyt-automation:latest
+    
+    container_name: nyt-library-automation
+    restart: unless-stopped
+    environment:
+      - HEADLESS=true
+    volumes:
+      # Mount .env file (create this on your Synology)
+      - ./env/.env:/app/.env:ro
+      # Mount logs directory to persist logs
+      - ./logs:/app/logs
+    # Run on a schedule using cron or Synology Task Scheduler
+    # For manual runs, use: docker-compose run --rm nyt-automation
