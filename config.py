@@ -21,6 +21,9 @@ NYT_PASSWORD = os.getenv("NYT_PASSWORD", "")
 HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
 BROWSER = os.getenv("BROWSER", "chrome")  # chrome or firefox
 
+# Force run (bypass duplicate run check)
+FORCE_RUN = os.getenv("FORCE_RUN", "false").lower() == "true"
+
 # Logging configuration
 LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "automation.log")

@@ -27,6 +27,7 @@ from config import (
     NYT_USERNAME,
     NYT_PASSWORD,
     HEADLESS,
+    FORCE_RUN,
     LOG_DIR,
     LOG_FILE
 )
@@ -177,10 +178,28 @@ def login_nyt(driver, logger):
         # Wait a moment for page to fully load
         time.sleep(2)
         
+        # Check if code was already redeemed or if we're on a success page
+        page_source = driver.page_source.lower()
+        current_url = driver.current_url.lower()
+        
+        # Check for "already redeemed" or "code already used" messages
+        if any(phrase in page_source for phrase in [
+            "code already redeemed",
+            "already redeemed",
+            "code has already been used",
+            "this code has already been redeemed",
+            "your access code is valid",
+            "access code is valid",
+            "this access code has already been used"
+        ]):
+            logger.info("Code appears to have been already redeemed - login not required")
+            return True  # Return True since redemption succeeded (just already done)
+        
         # STEP 1: Enter email and click Continue
         try:
             # Look for email field (NY Times uses "Email address" label)
-            email_field = WebDriverWait(driver, 10).until(
+            # Use a shorter timeout since we already checked for "already redeemed"
+            email_field = WebDriverWait(driver, 8).until(
                 EC.visibility_of_element_located((
                     By.XPATH,
                     "//input[@type='email'] | "
@@ -221,7 +240,17 @@ def login_nyt(driver, logger):
             driver.execute_script("arguments[0].blur();", email_field)
             time.sleep(1.5)  # Wait for form validation to complete
         except (TimeoutException, Exception) as e:
+            # Check again if code was already redeemed (page might have loaded differently)
+            page_source_check = driver.page_source.lower()
+            if any(phrase in page_source_check for phrase in [
+                "code already redeemed", "already redeemed", "code has already been used",
+                "this code has already been redeemed", "your access code is valid",
+                "access code is valid", "this access code has already been used"
+            ]):
+                logger.info("Code was already redeemed - login not required")
+                return True
             logger.warning(f"Email field not found: {e}")
+            logger.warning("This may indicate the code was already redeemed or the page structure changed")
             return False
         
         # Click Continue button - wait for it to be enabled
@@ -444,10 +473,13 @@ def main():
     """Main automation function"""
     logger = setup_logging()
     
-    # Check if already ran today
-    if already_ran_today(logger):
+    # Check if already ran today (unless FORCE_RUN is set)
+    if not FORCE_RUN and already_ran_today(logger):
         logger.info("Exiting - automation already completed today.")
+        logger.info("To force a re-run, set FORCE_RUN=true environment variable.")
         return
+    elif FORCE_RUN:
+        logger.info("FORCE_RUN enabled - bypassing duplicate run check.")
     
     driver = None
     
