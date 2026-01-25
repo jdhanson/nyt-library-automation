@@ -17,5 +17,6 @@ services:
       - ./env/.env:/app/.env:ro
       # Mount logs directory to persist logs
       - ./logs:/app/logs
+    network_mode: host
     # Run on a schedule using cron or Synology Task Scheduler
     # For manual runs, use: docker-compose run --rm nyt-automation

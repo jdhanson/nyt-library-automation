@@ -1,8 +1,14 @@
 #!/bin/bash
 # Script to build Docker image on Mac and prepare for transfer to Synology NAS
 
-echo "Building Docker image..."
-docker build -t nyt-automation:latest .
+echo "Building Docker image for linux/amd64 (x86_64)..."
+echo "Setting up buildx for cross-platform builds..."
+
+# Create buildx builder if it doesn't exist
+docker buildx create --name multiarch-builder --use 2>/dev/null || docker buildx use multiarch-builder 2>/dev/null || true
+
+# Build for linux/amd64 (x86_64) - required for Synology DS1513
+docker buildx build --platform linux/amd64 -t nyt-automation:latest -f Dockerfile . --load
 
 if [ $? -eq 0 ]; then
     echo "Image built successfully!"

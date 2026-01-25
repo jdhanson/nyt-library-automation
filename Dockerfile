@@ -26,18 +26,19 @@ RUN apt-get update && apt-get install -y \
     libxkbcommon0 \
     libxrandr2 \
     xdg-utils \
+    sed \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Google Chrome and ChromeDriver (for amd64/x86_64)
 # Note: For ARM-based Synology NAS, you may need to use Chromium instead
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ] || [ "$ARCH" = "x86_64" ]; then \
-        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
-        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list && \
+        mkdir -p /etc/apt/keyrings && \
+        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg && \
+        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list && \
         apt-get update && \
         apt-get install -y google-chrome-stable && \
-        CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+' | head -1) && \
-        CHROMEDRIVER_VERSION=$(echo $CHROME_VERSION | cut -d. -f1-3) && \
+        CHROME_VERSION=$(google-chrome --version | sed -E 's/.* ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+).*/\1/' | head -1) && \
         wget -q https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chromedriver-linux64.zip -O /tmp/chromedriver.zip && \
         unzip -q /tmp/chromedriver.zip -d /tmp/ && \
         mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver && \

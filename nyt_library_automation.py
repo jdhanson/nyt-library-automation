@@ -181,19 +181,41 @@ def login_nyt(driver, logger):
         # Check if code was already redeemed or if we're on a success page
         page_source = driver.page_source.lower()
         current_url = driver.current_url.lower()
+        page_title = driver.title.lower()
+        
+        logger.info(f"Checking page for 'already redeemed' status. URL: {current_url}, Title: {driver.title}")
         
         # Check for "already redeemed" or "code already used" messages
-        if any(phrase in page_source for phrase in [
-            "code already redeemed",
-            "already redeemed",
-            "code has already been used",
-            "this code has already been redeemed",
-            "your access code is valid",
-            "access code is valid",
-            "this access code has already been used"
-        ]):
+        redeemed_phrases = [
+            "code already redeemed", "already redeemed", "code has already been used",
+            "this code has already been redeemed", "this access code has already been used",
+            "code was already redeemed", "has already been redeemed"
+        ]
+        
+        if any(phrase in page_source for phrase in redeemed_phrases):
             logger.info("Code appears to have been already redeemed - login not required")
             return True  # Return True since redemption succeeded (just already done)
+        
+        if any(phrase in page_title for phrase in ["already redeemed", "code already"]):
+            logger.info("Page title indicates code was already redeemed - login not required")
+            return True
+        
+        # Check if we're actually on an activation/success page (not a login page)
+        if "activate" in current_url or "activate-access" in current_url:
+            logger.info("Already on activation page - login may not be required")
+            # Check if there's a "Continue" button or success message
+            if "your access code is valid" in page_source or "access code is valid" in page_source:
+                logger.info("Access code is valid - attempting to click Continue if present")
+                try:
+                    continue_button = WebDriverWait(driver, 5).until(
+                        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Continue')]"))
+                    )
+                    continue_button.click()
+                    time.sleep(3)
+                    logger.info("Clicked Continue button on activation page")
+                except:
+                    logger.info("No Continue button found or already processed")
+            return True
         
         # STEP 1: Enter email and click Continue
         try:
@@ -391,6 +413,24 @@ def redeem_nyt_code(driver, gift_code, redirect_url, logger):
             # Check if login is required
             current_url = driver.current_url
             logger.info(f"Current URL after redemption: {current_url}")
+            
+            # Check for "already redeemed" message BEFORE attempting login
+            page_source_check = driver.page_source.lower()
+            page_title = driver.title.lower()
+            
+            # Log page title for debugging
+            logger.info(f"Page title after redemption: {driver.title}")
+            
+            # Check multiple indicators of "already redeemed"
+            if any(phrase in page_source_check for phrase in [
+                "code already redeemed", "already redeemed", "code has already been used",
+                "this code has already been redeemed", "this access code has already been used",
+                "code was already redeemed"
+            ]) or any(phrase in page_title for phrase in [
+                "already redeemed", "code already"
+            ]):
+                logger.info("Code was already redeemed - no login required")
+                return True
             
             # If we're redirected to a login page, handle login
             if "login" in current_url.lower() or "signin" in current_url.lower() or NYT_USERNAME:
